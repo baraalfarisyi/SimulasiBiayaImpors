@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SimulasiBiayaImpor.SimulasiContext;
 using SimulasiBiayaImpors.Models;
 using System.Text.Json;
@@ -22,29 +23,31 @@ namespace SImulasiBiayaImpor.Controllers
         [HttpPost]
         public async Task<IActionResult> PostSimulasi([FromBody] SimulasiRequest request)
         {
-            var uraianResponse = await _httpClient.GetAsync($"https://api-hub.ilcs.co.id/my/n/barang?hs_code={request.KodeBarang}");
-            if (!uraianResponse.IsSuccessStatusCode)
+            var url = $"https://api-hub.ilcs.co.id/my/n/barang?hs_code={request.KodeBarang}";
+            var responseBody = await _httpClient.GetStringAsync(url);
+            var apiResponse = JsonConvert.DeserializeObject<ApiResponse>(responseBody);
+
+            string uraianBarang = null;
+            int bm = 0;
+
+            if (apiResponse != null && apiResponse.data != null && apiResponse.data.Count > 0)
             {
-                return BadRequest("Gagal mendapatkan uraian barang");
+                var firstItem = apiResponse.data.First();
+                uraianBarang = firstItem.sub_header;
+                bm = firstItem.bm;
+
+                // Mengeluarkan uraianBarang dan bm
+                Console.WriteLine($"Uraian Barang: {uraianBarang}");
+                Console.WriteLine($"BM: {bm}");
             }
-
-            var uraianContent = await uraianResponse.Content.ReadAsStringAsync();
-            var uraianJson = JsonDocument.Parse(uraianContent);
-            var uraianBarang = uraianJson.RootElement.GetProperty("description").GetString();
-
-            var tarifResponse = await _httpClient.GetAsync($"https://api-hub.ilcs.co.id/my/n/tarif?hs_code={request.KodeBarang}");
-            if (!tarifResponse.IsSuccessStatusCode)
+            else
             {
-                return BadRequest("Gagal mendapatkan tarif biaya impor");
+                Console.WriteLine("No data found in the response.");
             }
-
-            var tarifContent = await tarifResponse.Content.ReadAsStringAsync();
-            var tarifJson = JsonDocument.Parse(tarifContent);
-            var bm = tarifJson.RootElement.GetProperty("bm").GetInt32();
 
             var nilaiBm = (request.NilaiKomoditas * bm) / 100;
 
-            var simulasi = new BiayaImpor
+            var biayaImpor = new BiayaImpor
             {
                 Id = Guid.NewGuid(),
                 KodeBarang = request.KodeBarang,
@@ -55,10 +58,13 @@ namespace SImulasiBiayaImpor.Controllers
                 WaktuInsert = DateTime.UtcNow
             };
 
-            _context.BiayaImpors.Add(simulasi);
+            // Anda bisa menggunakan objek biayaImpor sesuai kebutuhan Anda
+
+
+            _context.BiayaImpors.Add(biayaImpor);
             await _context.SaveChangesAsync();
 
-            return Ok(simulasi);
+            return Ok(biayaImpor);
         }
 
         [HttpGet("{id}")]
@@ -87,5 +93,25 @@ namespace SImulasiBiayaImpor.Controllers
         public string KodeBarang { get; set; }
         public float NilaiKomoditas { get; set; }
     }
+
+    public class DataItem
+    {
+        public string hs_code { get; set; }
+        public int bm { get; set; }
+        public string ppnbm { get; set; }
+        public string cukai { get; set; }
+        public string bk { get; set; }
+        public string ppnbk { get; set; }
+        public string uraian_id { get; set; }
+        public string sub_header { get; set; }
+    }
+
+    public class ApiResponse
+    {
+        public List<DataItem> data { get; set; }
+        public string code { get; set; }
+        public string message { get; set; }
+    }
+
 }
 

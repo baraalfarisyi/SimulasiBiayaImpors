@@ -9,7 +9,7 @@
     }
   },
   "profiles": {
-    "http": {
+    "Simulasi": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
